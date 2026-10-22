@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MedGuard AI prototype (simulated)</title>
+<style>
+:root{--bg:#f6f7f9;--cd:#fff;--tx:#1b1f24;--mu:#5b6472;--bd:#dde1e7;--ok:#1a7f4b;--okb:#e3f4ea;--wn:#8a5a00;--wnb:#fff1cc;--bad:#c62828;--badb:#fde4e4;--ac:#1f3864;--acb:#e6ecf7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--cd:#1e232b;--tx:#e8ebf0;--mu:#9aa4b2;--bd:#323946;--ok:#5fd394;--okb:#17372a;--wn:#f0c15a;--wnb:#3b2f12;--bad:#ff8a80;--badb:#43191a;--ac:#9db8f0;--acb:#223052}}
+:root[data-theme="dark"]{--bg:#14171c;--cd:#1e232b;--tx:#e8ebf0;--mu:#9aa4b2;--bd:#323946;--ok:#5fd394;--okb:#17372a;--wn:#f0c15a;--wnb:#3b2f12;--bad:#ff8a80;--badb:#43191a;--ac:#9db8f0;--acb:#223052}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+.w{max-width:980px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:0 0 2px}h2{font-size:15px;margin:0 0 8px}
+.mu{color:var(--mu);font-size:13px}
+.c{background:var(--cd);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px}
+.g{display:grid;gap:10px}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+@media(max-width:640px){.g2{grid-template-columns:1fr}}
+button{font:inherit;border:1px solid var(--bd);background:var(--acb);color:var(--ac);border-radius:8px;padding:8px 10px;cursor:pointer;margin:0 6px 6px 0}
+button.d{background:var(--badb);color:var(--bad)}button.n{background:var(--okb);color:var(--ok)}
+.v{text-align:center}.v b{display:block;font-size:28px}
+.ch{display:inline-block;border-radius:99px;padding:2px 9px;font-size:12px;font-weight:600;background:var(--acb);color:var(--ac)}
+.ok{background:var(--okb);color:var(--ok)}.wn{background:var(--wnb);color:var(--wn)}.bad{background:var(--badb);color:var(--bad)}
+.ly{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--bd)}
+.ly:first-of-type{border-top:0}
+pre{margin:0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.lg{max-height:230px;overflow:auto;font-size:13px}
+.lg div{padding:5px 0;border-top:1px solid var(--bd);display:flex;gap:8px;align-items:flex-start}
+.sm{background:var(--acb);color:var(--tx);border-radius:12px;padding:8px 10px;margin-bottom:6px;font-size:13px}
+</style></head><body><div class="w">
+<h1>MedGuard AI: prototype demo</h1>
+<div class="mu">Simulated data. This page runs the same checks as the project’s server: real HMAC-SHA256 verification, replay detection and a hash-chained log. Research prototype, not a medical device. The demo key is public.</div>
+<div class="c" style="margin-top:12px"><h2>Try a scenario</h2>
+<button onclick="normal()">Normal reading</button>
+<button onclick="abn()">Abnormal reading</button>
+<button onclick="motion()">Abnormal + motion artifact</button>
+<button class="d" onclick="tamper()">Attack: modify message</button>
+<button class="d" onclick="replay()">Attack: replay message</button>
+<button id="nb" class="n" onclick="toggleNet()">Internet: connected</button>
+<button onclick="reset()">Reset</button></div>
+<div class="g g3">
+<div class="c v"><span class="mu">Heart rate</span><b id="hr">-</b><span class="mu">bpm</span></div>
+<div class="c v"><span class="mu">SpO₂</span><b id="sp">-</b><span class="mu">%</span></div>
+<div class="c v"><span class="mu">Temperature</span><b id="tp">-</b><span class="mu">°C</span></div></div>
+<div class="c"><span class="mu">Message security</span> <span id="s1" class="ch">waiting</span> &nbsp;
+<span class="mu">Health status</span> <span id="s2" class="ch">waiting</span> &nbsp;
+<span class="mu">Network</span> <span id="s3" class="ch ok">online</span> &nbsp;
+<span class="mu">Local buzzer</span> <span id="s4" class="ch">off</span> &nbsp;
+<span class="mu">Queued</span> <span id="s5" class="ch">0</span></div>
+<div class="g g2">
+<div><div class="c"><h2>Three-layer trust decision</h2>
+<div class="ly"><span><b>1. Security</b><br><span class="mu">Authentic, fresh, in order?</span></span><span id="l1" class="ch">-</span></div>
+<div class="ly"><span><b>2. Sensor quality</b><br><span class="mu">Motion or weak signal?</span></span><span id="l2" class="ch">-</span></div>
+<div class="ly"><span><b>3. Health</b><br><span class="mu">Abnormal values?</span></span><span id="l3" class="ch">-</span></div>
+<p class="mu" id="why" style="margin:8px 0 0">Uncertain readings never silence a possible health alert.</p></div>
+<div class="c"><h2>Last message (from the ESP32-S3)</h2><pre id="msg">Send a reading to see the signed message.</pre></div></div>
+<div><div class="c"><h2>Caregiver phone (SMS fallback)</h2><div id="ph" class="mu">No SMS yet. Turn the internet off and send an abnormal reading.</div></div>
+<div class="c"><h2>Event log (hash-chained)</h2><div id="lg" class="lg"></div></div></div></div>
+<div class="mu">Each log entry stores a hash of the one before it, so edits or deletions are detectable. In the real system the SMS channel is not authenticated, so treat it as a prompt to check the patient.</div>
+</div>
+<script>
+const E=new TextEncoder(),KEY="demo-key-public",$=i=>document.getElementById(i);
+const hx=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+let ck;async function hmac(s){ck=ck||await crypto.subtle.importKey("raw",E.encode(KEY),{name:"HMAC",hash:"SHA-256"},false,["sign"]);return hx(await crypto.subtle.sign("HMAC",ck,E.encode(s)))}
+async function sha(s){return hx(await crypto.subtle.digest("SHA-256",E.encode(s)))}
+const canon=m=>[m.device_id,m.seq,m.ts,m.hr,m.spo2,Number(m.temp).toFixed(1),m.motion,m.sigq,m.buffered].join("|");
+const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+let seq,last,net,queue,chain,good;
+function reset(){seq=0;last=-1;net=true;queue=[];chain="0".repeat(64);good=null;
+["hr","sp","tp"].forEach(i=>$(i).textContent="-");$("lg").innerHTML="";$("ph").className="mu";$("ph").textContent="No SMS yet. Turn the internet off and send an abnormal reading.";
+$("msg").textContent="Send a reading to see the signed message.";setNet();chip("s1","waiting","");chip("s2","waiting","");chip("s4","off","");$("s5").textContent="0";["l1","l2","l3"].forEach(i=>chip(i,"-",""))}
+function chip(i,t,c){const e=$(i);e.textContent=t;e.className="ch "+c}
+function setNet(){$("nb").textContent="Internet: "+(net?"connected":"down");$("nb").className=net?"n":"d";chip("s3",net?"online":"offline",net?"ok":"bad");$("s5").textContent=queue.length}
+async function make(o){seq++;const m=Object.assign({device_id:"esp32-s3-01",seq,ts:Math.floor(Date.now()/1000),hr:72+rnd(-4,4),spo2:97+rnd(-1,1),temp:+(36.6+rnd(-3,3)/10).toFixed(1),motion:0,sigq:90,buffered:0},o||{});m.tag=await hmac(canon(m));return m}
+function classify(m){const f=[],a=[];if(m.motion)f.push("motion detected");if(m.sigq<50)f.push("low signal quality");
+if(m.hr<50||m.hr>120)a.push("heart rate "+m.hr+" bpm");if(m.spo2<92)a.push("SpO₂ "+m.spo2+"%");if(m.temp<35||m.temp>38)a.push("temperature "+m.temp+" °C");
+const s=f.length&&a.length?"ALERT_LOW_CONFIDENCE":f.length?"SENSOR_FAULT":a.length?"HEALTH_ALERT":"NORMAL";return{s,f,a}}
+async function log(k,t,c){chain=await sha(chain+"|"+k+"|"+t);const d=document.createElement("div");
+d.innerHTML='<span class="ch '+c+'"></span><span style="flex:1"></span><span class="mu"></span>';
+d.children[0].textContent=k;d.children[1].textContent=t;d.children[2].textContent=chain.slice(0,8);$("lg").prepend(d)}
+function show(m,mark){$("msg").textContent=["device_id: "+m.device_id,"seq: "+m.seq,"hr: "+m.hr+(mark||""),"spo2: "+m.spo2,"temp: "+m.temp,"motion: "+m.motion+"  quality: "+m.sigq,"buffered: "+m.buffered,"hmac: "+m.tag.slice(0,24)+"…"].join("\n")}
+function vit(m){$("hr").textContent=m.hr;$("sp").textContent=m.spo2;$("tp").textContent=Number(m.temp).toFixed(1)}
+function sms(t){if($("ph").className==="mu")$("ph").textContent="";$("ph").className="";const d=document.createElement("div");d.className="sm";d.textContent=t;$("ph").prepend(d)}
+function alarm(c){const on=c.s==="HEALTH_ALERT"||c.s==="ALERT_LOW_CONFIDENCE";chip("s4",on?"ON":"off",on?"bad":"")}
+async function server(m){const l1=await hmac(canon(m))===m.tag;
+if(!l1){chip("l1","FAIL: tag mismatch","bad");chip("l2","not checked","");chip("l3","not checked","");chip("s1","rejected","bad");
+$("why").textContent="The message was changed after it was signed, so the server rejected it before looking at the values.";await log("BAD_HMAC","modified message rejected (seq "+m.seq+")","bad");return}
+if(m.seq<=last){chip("l1","FAIL: replay","bad");chip("l2","not checked","");chip("l3","not checked","");chip("s1","rejected","bad");
+$("why").textContent="This sequence number was already accepted, so the repeated message was rejected.";await log("REPLAY","seq "+m.seq+" is not newer than "+last,"bad");return}
+last=m.seq;good={...m};const c=classify(m);vit(m);chip("l1","PASS","ok");chip("s1","verified","ok");
+chip("l2",m.motion||m.sigq<50?"WEAK":"GOOD",m.motion||m.sigq<50?"wn":"ok");chip("l3",c.a.length?"ABNORMAL":"NORMAL",c.a.length?"bad":"ok");
+chip("s2",c.s.replace(/_/g," "),c.s==="NORMAL"?"ok":c.s==="SENSOR_FAULT"?"wn":"bad");alarm(c);
+$("why").textContent=c.s==="ALERT_LOW_CONFIDENCE"?"Reading is unreliable but values look abnormal, so it still alerts.":c.s==="SENSOR_FAULT"?"Likely a sensor problem, not a health event.":c.s==="HEALTH_ALERT"?"Validated reading looks abnormal: health alert.":"All three layers passed.";
+await log(c.s==="NORMAL"?"ACCEPTED":c.s,[...c.a,...c.f].join("; ")||"reading accepted",c.s==="NORMAL"?"ok":c.s==="SENSOR_FAULT"?"wn":"bad")}
+async function deliver(m){if(net){await server(m);return}
+queue.push(m);const c=classify(m);vit(m);alarm(c);chip("s2",c.s.replace(/_/g," "),c.s==="NORMAL"?"ok":"bad");setNet();
+chip("l1","offline","wn");chip("l2","-","");chip("l3","-","");$("why").textContent="No internet: the device alerts locally and queues the reading.";
+await log("QUEUED","reading stored on device (seq "+m.seq+")","wn");
+if(c.a.length){sms("MedGuard ALERT "+m.device_id+": HR "+m.hr+" SpO₂ "+m.spo2+" Temp "+m.temp+(c.f.length?" (reading may be unreliable, please check)":" - please check the patient"));await log("SMS","alert sent through GSM modem","wn")}}
+async function toggleNet(){net=!net;setNet();
+if(!net){sms("MedGuard esp32-s3-01: connection to server lost. Local alerts still active.");await log("LINK_DOWN","server unreachable; SMS fallback armed","wn");return}
+const n=queue.length;for(const m of queue){m.buffered=1;m.tag=await hmac(canon(m));await server(m)}queue=[];setNet();await log("RECOVERED",n+" buffered message(s) synced after reconnection","ok")}
+async function normal(){const m=await make();show(m);await deliver(m)}
+async function abn(){const m=await make({hr:150,spo2:90});show(m);await deliver(m)}
+async function motion(){const m=await make({hr:150,motion:1,sigq:30});show(m);await deliver(m)}
+async function tamper(){if(!net)return log("HINT","Restore the internet first: attacks reach the server path","wn");
+const m=await make({hr:76}),t={...m};t.hr=180;show(t,"   <- changed from 76, tag untouched");await deliver(t)}
+async function replay(){if(!net)return log("HINT","Restore the internet first: attacks reach the server path","wn");
+if(!good)return log("HINT","Send a normal reading first, then replay it","wn");show(good,"   (captured copy)");await deliver({...good})}
+reset();
+</script></body></html>
